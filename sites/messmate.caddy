@@ -1,0 +1,30 @@
+# MessMate. Owned by the MessMate team.
+
+# The API host — the mobile app and the admin console.
+dev-messmate.{$ROOT_DOMAIN} {
+	encode zstd gzip
+
+	# Unique alias, for the same reason LiveQueue uses one: `api` alone is
+	# ambiguous across the product networks this proxy is attached to.
+	reverse_proxy messmate-api:3000 {
+		# Carried over from MessMate's own Caddyfile. With a single upstream an
+		# active check does not move traffic anywhere — it decides whether Caddy
+		# answers 502 itself or forwards into a process that is up but not
+		# serving, which is the difference between a clear error and a hang.
+		health_uri /health
+		health_interval 30s
+	}
+
+	import hardened
+}
+
+# The marketing host. Static files only, no API surface exposed here — served by
+# the stack's own nginx from a bind mount, so copy changes ship with a `git pull`
+# and the page stays up when the API is down.
+messmate.{$ROOT_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy messmate-web:80
+
+	import hardened
+}

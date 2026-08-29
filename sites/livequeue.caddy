@@ -1,0 +1,43 @@
+# LiveQueue. Owned by the LiveQueue team; nothing else in this repo depends on
+# it, and a mistake here is caught by `deploy/reload.sh` before it reaches the
+# running proxy.
+
+clinicqueue.{$ROOT_DOMAIN} {
+	# Everything except the live streams is compressed.
+	#
+	# This exclusion is not a precaution, it is a fix. Caddy's `encode` matches
+	# `text/*` by default, which includes `text/event-stream`, and compressing
+	# an SSE stream breaks it in two ways that both look like "the queue froze":
+	# the encoder holds the response headers until the first body bytes arrive,
+	# so the connection is not established until the first event — and it then
+	# holds each event until it has a full compression frame to emit, so events
+	# arrive late, batched, or truncated mid-message.
+	#
+	# `flush_interval -1` below only disables buffering in the *proxy*. The
+	# encoder sits in front of it and buffers anyway, which is why that setting
+	# alone was not enough.
+	#
+	# Matched on the path rather than the response's Content-Type because
+	# `encode`'s own `match` is an allow-list with no negation. These two routes
+	# are the only SSE endpoints the app has — see `api/routers/streams.py`.
+	@compressible not path_regexp ^/api/v1/(track|sessions)/[^/]+/stream$
+	encode @compressible zstd gzip
+
+	# `livequeue-api`, not `api`: this proxy is joined to several product
+	# networks, and more than one of them has a service called `api`. A bare
+	# name resolves ambiguously and lands on whichever stack answers first.
+	reverse_proxy livequeue-api:8000 {
+		# Server-Sent Events must not be buffered or the console updates in
+		# batches — or, worse, sits still until the response is big enough to
+		# flush.
+		flush_interval -1
+		# Long enough that an idle stream is not reaped mid-shift. The client
+		# also watches for silence and reconnects, so this is the second line
+		# of defence rather than the first.
+		transport http {
+			read_timeout 1h
+		}
+	}
+
+	import hardened
+}

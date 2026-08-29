@@ -1,0 +1,53 @@
+# The edge stack. One container: Caddy, terminating TLS for every hostname and
+# serving the marketing site off a bind mount.
+#
+# This is the only stack on the droplet that publishes 80/443. Products bring up
+# their own databases and applications and stay off the host's ports entirely;
+# this proxy reaches them over the shared `samantar-edge` network by a unique
+# alias each.
+#
+# The network is external — created once by hand, owned by no single stack — so
+# that `docker compose down` in any one project cannot take it away from the
+# others.
+#
+#   docker network create samantar-edge     # once, before the first up
+#   docker compose up -d
+
+name: samantar-edge
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?set ROOT_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - ./site:/srv/landing:ro
+      # Certificates and the ACME account key. On a named volume because losing
+      # them means re-issuing every certificate from scratch, and Let's Encrypt
+      # rate-limits that per week.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - edge
+    logging:
+      driver: json-file
+      # Without this, a chatty container fills the droplet's disk and takes the
+      # databases down with it.
+      options: {max-size: '10m', max-file: '5'}
+
+networks:
+  edge:
+    external: true
+    name: samantar-edge
+
+volumes:
+  caddy-data:
+  caddy-config:
