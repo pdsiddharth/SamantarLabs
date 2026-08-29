@@ -13,10 +13,23 @@
 	email {$ACME_EMAIL}
 }
 
-# Applied to every site. Defined once here rather than copied into each snippet
-# so that adding a header is one edit, not three — and so a product cannot
-# quietly ship without them.
+# Logging alone. For upstreams that set their own security headers — MessMate's
+# Express app runs helmet — because adding ours on top does not double the
+# protection, it produces two conflicting values for the same header. A browser
+# seeing `X-Frame-Options: DENY, SAMEORIGIN` may discard both.
+(logged) {
+	log {
+		output stdout
+		format console
+	}
+}
+
+# Logging plus headers. For upstreams that set none of their own, and for the
+# static sites Caddy serves itself. Defined once here rather than copied into
+# each snippet so that adding a header is one edit, not three.
 (hardened) {
+	import logged
+
 	header {
 		X-Frame-Options DENY
 		X-Content-Type-Options nosniff
@@ -25,11 +38,6 @@
 		# host again. Matters most for links that travel over WhatsApp and get
 		# opened on networks nobody controls.
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	}
-
-	log {
-		output stdout
-		format console
 	}
 }
 

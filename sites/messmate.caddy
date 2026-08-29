@@ -15,7 +15,10 @@ dev-messmate.{$ROOT_DOMAIN} {
 		health_interval 30s
 	}
 
-	import hardened
+	# `logged`, not `hardened`: the Express app runs helmet and already sets a
+	# stricter set than ours, CSP included. Adding ours produced a second,
+	# conflicting X-Frame-Options and Referrer-Policy on every response.
+	import logged
 }
 
 # The marketing host. Static files only, no API surface exposed here — served by
