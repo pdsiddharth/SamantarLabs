@@ -1,8 +1,26 @@
 # LiveQueue. Owned by the LiveQueue team; nothing else in this repo depends on
 # it, and a mistake here is caught by `deploy/reload.sh` before it reaches the
 # running proxy.
+#
+# Two hostnames, split by audience:
+#
+#   dev-livequeue   the application — console, waiting-room boards, the patient
+#                   tracker, the API and the WhatsApp webhook.
+#   clinicqueue     the marketing page, and nothing else.
+#
+# The landing page is served by the application itself (see `api/spa.py`, which
+# answers `/` with `landing.html`), so both hostnames still proxy to the same
+# container. The split is enforced here rather than there: `clinicqueue` serves
+# the two public pages and sends everything else next door.
+#
+# A redirect, not a 404, because links outlive deployments. A tracker link in a
+# patient's WhatsApp, a console bookmarked on a receptionist's tablet, the
+# `/login` button on the landing page itself — all of them keep working, and the
+# patient who taps a months-old link is the one person who cannot be told about
+# a hostname change.
 
-clinicqueue.{$ROOT_DOMAIN} {
+# The application.
+dev-livequeue.{$ROOT_DOMAIN} {
 	# Everything except the live streams is compressed.
 	#
 	# This exclusion is not a precaution, it is a fix. Caddy's `encode` matches
@@ -38,6 +56,25 @@ clinicqueue.{$ROOT_DOMAIN} {
 			read_timeout 1h
 		}
 	}
+
+	import hardened
+}
+
+# The marketing page.
+clinicqueue.{$ROOT_DOMAIN} {
+	encode zstd gzip
+
+	# The two pages this hostname is for. `/privacy.html` is listed because the
+	# landing page links to it, and because it is the address printed in the
+	# clinic's own privacy notice — a DPDP disclosure that 301s to a different
+	# hostname is a poor look on the one page whose job is to be trustworthy.
+	#
+	# No SSE exclusion here, and none needed: the streams live under `/api`,
+	# which is redirected away before it reaches the encoder.
+	@elsewhere not path / /privacy.html
+	redir @elsewhere https://dev-livequeue.{$ROOT_DOMAIN}{uri} permanent
+
+	reverse_proxy livequeue-api:8000
 
 	import hardened
 }
