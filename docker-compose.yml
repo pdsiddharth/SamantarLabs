@@ -27,8 +27,13 @@ services:
       ROOT_DOMAIN: ${ROOT_DOMAIN:?set ROOT_DOMAIN in .env}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./sites:/etc/caddy/sites:ro
+      # A directory, not the two files inside it. A single-file bind mount binds
+      # an inode, and `git pull` replaces a file by writing a new one and
+      # renaming it over the old — so the running container keeps reading the
+      # inode it started with, and a reload silently applies the previous
+      # config. Mounting the directory means the container resolves the name on
+      # every read and sees whatever the checkout currently holds.
+      - ./caddy:/etc/caddy:ro
       - ./site:/srv/landing:ro
       # Certificates and the ACME account key. On a named volume because losing
       # them means re-issuing every certificate from scratch, and Let's Encrypt

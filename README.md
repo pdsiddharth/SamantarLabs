@@ -11,15 +11,15 @@ MessMate was reachable — a routing change for the queue console could take the
 mess hall down, and nothing in the file told you so until it happened.
 
 The proxy is a shared resource, so it is owned by the shared repo. Each product
-gets one file under `sites/` and touches nothing else.
+gets one file under `caddy/sites/` and touches nothing else.
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `Caddyfile` | Global options, the `hardened` snippet, the marketing site, and `import sites/*.caddy` |
-| `sites/livequeue.caddy` | LiveQueue's routing. Owned by that team. |
-| `sites/messmate.caddy` | MessMate's routing. Owned by that team. |
+| `caddy/Caddyfile` | Global options, the `hardened` snippet, the marketing site, and `import sites/*.caddy` |
+| `caddy/sites/livequeue.caddy` | LiveQueue's routing. Owned by that team. |
+| `caddy/sites/messmate.caddy` | MessMate's routing. Owned by that team. |
 | `site/index.html` | The marketing page. Bind-mounted, so a `git pull` publishes it. |
 | `deploy/reload.sh` | Validate, then reload without dropping connections. |
 
@@ -52,7 +52,7 @@ cd ~/MessMate/deploy && docker compose -f docker-compose.prod.yml -f docker-comp
 
 ## Changing routing
 
-Edit your product's file in `sites/`, then:
+Edit your product's file in `caddy/sites/`, then:
 
 ```bash
 ./deploy/reload.sh
@@ -72,3 +72,13 @@ not parse fails the whole load, and a certificate that will not issue is a
 retry loop in the shared log. `reload.sh` catches the first case. Real failure
 isolation would mean a proxy per product behind another proxy, which costs more
 than it is worth at three hostnames.
+
+## One deployment note
+
+`caddy/` is mounted as a whole directory rather than as individual files. A
+single-file bind mount binds an inode; `git pull` replaces a file by renaming a
+new one over the old, so a container started before the pull keeps reading the
+old inode and `reload.sh` cheerfully re-applies the config you just changed. The
+directory mount removes that failure mode — but a container created *before*
+this change still has the old mounts, so it needs one `docker compose up -d`
+(which recreates it) before reloads behave.
