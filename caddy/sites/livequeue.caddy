@@ -11,7 +11,12 @@
 # The landing page is served by the application itself (see `api/spa.py`, which
 # answers `/` with `landing.html`), so both hostnames still proxy to the same
 # container. The split is enforced here rather than there: `clinicqueue` serves
-# the two public pages and sends everything else next door.
+# the two public pages, `dev-livequeue` rewrites past the marketing page to the
+# app shell, and everything else is sent next door.
+#
+# It has to be enforced here, because this is the only layer that knows which
+# hostname was asked for. One container answers both, so a setting in the
+# application could only turn the landing page off for both at once.
 #
 # A redirect, not a 404, because links outlive deployments. A tracker link in a
 # patient's WhatsApp, a console bookmarked on a receptionist's tablet, the
@@ -40,6 +45,21 @@ dev-livequeue.{$ROOT_DOMAIN} {
 	# are the only SSE endpoints the app has — see `api/routers/streams.py`.
 	@compressible not path_regexp ^/api/v1/(track|sessions)/[^/]+/stream$
 	encode @compressible zstd gzip
+
+	# `/` is the application here, not the marketing page. This hostname is
+	# where staff sign in, and a receptionist who bookmarks the bare address
+	# should not land on a page selling the product she is already holding.
+	#
+	# A rewrite rather than `redir / /login`, because the shell is the honest
+	# entry point: it exchanges the stored refresh token before deciding
+	# anything, so somebody already signed in lands on today's sessions instead
+	# of being shown a password prompt they do not need. Signed out, the app
+	# sends itself to `/login`.
+	#
+	# `/index.html` is a real file in the build, so the app serves it without
+	# ever reaching its landing-page branch — and `clinicqueue`, which does not
+	# rewrite, still gets `landing.html` from the same container.
+	rewrite / /index.html
 
 	# `livequeue-api`, not `api`: this proxy is joined to several product
 	# networks, and more than one of them has a service called `api`. A bare
