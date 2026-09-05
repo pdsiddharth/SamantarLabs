@@ -1,0 +1,27 @@
+# TradeBot. Owned by the TradeBot team; nothing else in this repo depends on
+# it, and a mistake here is caught by `deploy/reload.sh` before it reaches the
+# running proxy.
+#
+# One hostname, and it is not public in any useful sense: the dashboard holds a
+# broker token and can start trading sessions, so everything behind it is gated
+# on TRADEBOT_UI_TOKEN. This block only carries TLS and the shared headers.
+
+dev-tradebot.{$ROOT_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy tradebot-dashboard:8765 {
+		# Walk-forward runs hold the request open for minutes on a
+		# single-core droplet. The default read timeout would return a 504
+		# while the job was still running correctly, which reads as a failure
+		# that did not happen.
+		transport http {
+			read_timeout 600s
+		}
+	}
+
+	# `hardened`, not `logged`: the dashboard sets its own CSP and
+	# X-Content-Type-Options but no HSTS or Referrer-Policy, so unlike
+	# MessMate's helmet setup there is nothing here to conflict with - these
+	# add cover the dashboard does not provide for itself.
+	import hardened
+}
