@@ -11,6 +11,9 @@
 
 {
 	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://flowpulse-web:3000/api/tls/ask
+	}
 }
 
 # Logging alone. For upstreams that set their own security headers — MessMate's

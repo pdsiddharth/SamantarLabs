@@ -1,0 +1,19 @@
+(flowpulse-upstream) {
+	encode zstd gzip
+	reverse_proxy flowpulse-web:3000 {
+		health_uri /api/health
+		health_interval 30s
+	}
+	import logged
+}
+
+flowpulse.{$ROOT_DOMAIN} {
+	import flowpulse-upstream
+}
+
+*.flowpulse.{$ROOT_DOMAIN} {
+	tls {
+		on_demand
+	}
+	import flowpulse-upstream
+}
